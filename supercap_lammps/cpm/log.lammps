@@ -1,0 +1,282 @@
+LAMMPS (2 Aug 2023 - Update 2)
+# electrodes with constant potential for graphene-ionic liquid supercapacitor
+
+boundary 		p p f        	# slab calculation
+include 		settings.mod 	# styles, groups, computes and fixes
+# set boundary in main script because ffield is periodic
+units 	real
+
+atom_style 	full
+pair_style 	lj/cut/coul/long 16
+bond_style 	harmonic
+angle_style 	harmonic
+kspace_style 	pppm/electrode 1e-7
+# kspace_modify in main script because ffield is periodic
+
+read_data 	"data.graph-il"
+Reading data file ...
+  orthogonal box = (0 0 -68) to (32.2 34.4 68)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  3776 atoms
+  scanning bonds ...
+  2 = max bonds/atom
+  scanning angles ...
+  1 = max angles/atom
+  reading bonds ...
+  640 bonds
+  reading angles ...
+  320 angles
+Finding 1-2 1-3 1-4 neighbors ...
+  special bond factors lj:    0        0        0       
+  special bond factors coul:  0        0        0       
+     2 = max # of 1-2 neighbors
+     1 = max # of 1-3 neighbors
+     1 = max # of 1-4 neighbors
+     2 = max # of special neighbors
+  special bonds CPU = 0.002 seconds
+  read_data CPU = 0.056 seconds
+
+# replicate 4 4 1 # test different sys sizes
+
+variable 	zpos atom "z > 0"
+group 		zpos variable zpos
+1891 atoms in group zpos
+group 		ele type 5
+832 atoms in group ele
+group 		top intersect ele zpos
+416 atoms in group top
+group 		bot subtract ele top
+416 atoms in group bot
+group       cation type 4
+320 atoms in group cation
+group       anion type 1
+320 atoms in group anion
+
+compute        den1 cation chunk/atom bin/1d z center 0.5  units box
+fix            chunk1 cation ave/chunk 10 1 100 den1 density/number ave running file cat_density.txt overwrite
+compute        den2 anion chunk/atom bin/1d z center 0.5 units box
+fix            chunk2 anion ave/chunk 10 1 100 den2 density/number ave running file an_density.txt overwrite
+
+dump            1 all custom 100 system.dump id type q xs ys zs ix iy iz
+dump            2 top custom 5000 anode.dump id type q xs ys zs
+dump            3 bot custom 5000 cathode.dump id type q xs ys zs
+group 		bmi type 1 2 3
+960 atoms in group bmi
+group 		electrolyte type 1 2 3 4
+1280 atoms in group electrolyte
+
+
+fix 		nvt electrolyte nvt temp 500.0 500.0 100
+fix 		shake bmi shake 1e-4 20 0 b 1 2 a 1
+Finding SHAKE clusters ...
+       0 = # of size 2 clusters
+       0 = # of size 3 clusters
+       0 = # of size 4 clusters
+     320 = # of frozen angles
+  find clusters CPU = 0.001 seconds
+variable        time equal step
+variable 	q atom q
+compute 	qtop top reduce sum v_q
+compute 	qbot bot reduce sum v_q
+compute 	ctemp electrolyte temp
+variable        qtop equal c_qtop
+variable        qbot equal c_qbot
+fix             elec_char all print 10 "${time} ${qtop} ${qbot}" file elec_char.txt screen no title "time anode_char cathode_char"
+kspace_modify 		slab 3.0     	# amat twostep
+
+fix 			conp bot electrode/conp -3.0 1.979 couple top 3.0 symm on 	#fix for the cpm calculation
+832 atoms in group conp_group
+
+thermo 			50
+thermo_style 		custom step temp c_ctemp epair etotal c_qbot c_qtop		# on screen outputs
+run 			5000
+
+CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
+
+Your simulation uses code contributions which should be cited:
+
+- kspace_style pppm/electrode command:
+
+@article{Ahrens2021,
+author = {Ahrens-Iwers, Ludwig J.V. and Mei{\ss}ner, Robert H.},
+doi = {10.1063/5.0063381},
+title = {{Constant potential simulations on a mesh}},
+journal = {Journal of Chemical Physics},
+year = {2021}
+volume = {155},
+pages = {104104},
+}
+- fix electrode command:
+
+@article{Ahrens2022
+author = {Ahrens-Iwers, Ludwig J.V. and Janssen, Mahijs and Tee, Shern R. and Mei{\ss}ner, Robert H.},
+doi = {10.1063/5.0099239},
+title = {{ELECTRODE: An electrochemistry package for LAMMPS}},
+journal = {The Journal of Chemical Physics},
+year = {2022}
+volume = {157},
+pages = {084801},
+}
+CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
+
+PPPM/electrode initialization ...
+  using 12-bit tables for long-range coulomb (../kspace.cpp:342)
+  G vector (1/distance) = 0.20904498
+  grid = 32 32 200
+  stencil order = 5
+  estimated absolute RMS force accuracy = 3.7023506e-05
+  estimated relative force accuracy = 1.1149519e-07
+  using double precision KISS FFT
+  3d grid and FFT values/proc = 307242 204800
+Generated 15 of 15 mixed pair_coeff terms from geometric mixing rule
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 18
+  ghost atom cutoff = 18
+  binsize = 9, bins = 4 4 16
+  2 neighbor lists, perpetual/occasional/extra = 2 0 0
+  (1) pair lj/cut/coul/long, perpetual
+      attributes: half, newton on
+      pair build: half/bin/newton
+      stencil: half/bin/3d
+      bin: standard
+  (2) fix electrode/conp, perpetual, copy from (1)
+      attributes: half, newton on
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 57.96 | 57.96 | 57.96 Mbytes
+   Step          Temp         c_ctemp         E_pair         TotEng         c_qbot         c_qtop    
+         0   0              0              25137211       25137211      -0.21523707     0.21523707   
+        50   18.024374      64.936612      25137051       25137237      -0.23076472     0.23076472   
+       100   49.080142      176.82157      25136797       25137303      -0.27813489     0.27813489   
+       150   71.704744      258.33148      25136683       25137421      -0.3514401      0.3514401    
+       200   83.950026      302.44769      25136704       25137569      -0.43969488     0.43969488   
+       250   89.672499      323.06411      25136804       25137727      -0.52719914     0.52719914   
+       300   94.053345      338.84704      25136921       25137889      -0.6003222      0.6003222    
+       350   103.05384      371.27321      25136994       25138055      -0.65413454     0.65413454   
+       400   114.25947      411.64387      25137048       25138225      -0.69014902     0.69014902   
+       450   123.47961      444.86137      25137118       25138390      -0.71395202     0.71395202   
+       500   128.49968      462.94722      25137220       25138543      -0.72806402     0.72806402   
+       550   132.48065      477.28951      25137320       25138684      -0.73714309     0.73714309   
+       600   138.84364      500.21354      25137382       25138812      -0.74591349     0.74591349   
+       650   140.39994      505.82042      25137470       25138916      -0.75294142     0.75294142   
+       700   140.82803      507.36271      25137549       25138999      -0.76326987     0.76326987   
+       750   145.72297      524.99776      25137564       25139064      -0.781869       0.781869     
+       800   145.1668       522.99404      25137600       25139095      -0.79933781     0.79933781   
+       850   145.71445      524.96709      25137588       25139088      -0.81080187     0.81080187   
+       900   142.52686      513.48309      25137577       25139045      -0.80959247     0.80959247   
+       950   134.66123      485.14551      25137601       25138988      -0.80251292     0.80251292   
+      1000   134.60144      484.9301       25137566       25138952      -0.80128205     0.80128205   
+      1050   134.71783      485.34943      25137552       25138940      -0.8096989      0.8096989    
+      1100   134.21354      483.53262      25137566       25138948      -0.82535421     0.82535421   
+      1150   138.92591      500.50992      25137548       25138979      -0.84872823     0.84872823   
+      1200   144.07109      519.04652      25137527       25139011      -0.88297986     0.88297986   
+      1250   144.26988      519.7627       25137533       25139019      -0.92521134     0.92521134   
+      1300   139.58548      502.88616      25137562       25138999      -0.96268473     0.96268473   
+      1350   134.87559      485.91778      25137586       25138975      -0.9861896      0.9861896    
+      1400   135.44176      487.95755      25137571       25138966      -0.99739549     0.99739549   
+      1450   137.21392      494.34211      25137560       25138973      -1.0039824      1.0039824    
+      1500   137.58207      495.66847      25137572       25138989      -1.0022214      1.0022214    
+      1550   139.53781      502.71444      25137571       25139008      -0.99014989     0.99014989   
+      1600   141.83396      510.9868       25137561       25139022      -0.97312065     0.97312065   
+      1650   143.55085      517.17224      25137543       25139021      -0.95975527     0.95975527   
+      1700   141.04585      508.14746      25137546       25138999      -0.95857901     0.95857901   
+      1750   134.42585      484.29751      25137584       25138969      -0.96675831     0.96675831   
+      1800   130.99543      471.9387       25137611       25138960      -0.97895042     0.97895042   
+      1850   132.89755      478.7915       25137619       25138987      -0.99344252     0.99344252   
+      1900   137.9758       497.08695      25137621       25139042      -1.0082357      1.0082357    
+      1950   148.80632      536.10619      25137564       25139096      -1.0193771      1.0193771    
+      2000   150.48318      542.14744      25137550       25139100      -1.028644       1.028644     
+      2050   143.57934      517.2749       25137566       25139044      -1.0410675      1.0410675    
+      2100   137.26109      494.51207      25137562       25138975      -1.0618163      1.0618163    
+      2150   134.64987      485.10458      25137535       25138922      -1.0886181      1.0886181    
+      2200   131.67321      474.38053      25137537       25138893      -1.1142778      1.1142778    
+      2250   132.68813      478.03701      25137531       25138898      -1.1391394      1.1391394    
+      2300   133.93728      482.53733      25137554       25138933      -1.1635057      1.1635057    
+      2350   136.89963      493.20984      25137580       25138989      -1.1861899      1.1861899    
+      2400   145.34518      523.63669      25137554       25139051      -1.2128981      1.2128981    
+      2450   146.96015      529.45497      25137565       25139079      -1.2387846      1.2387846    
+      2500   142.05205      511.7725       25137601       25139064      -1.2619709      1.2619709    
+      2550   135.12634      486.82119      25137642       25139034      -1.2832541      1.2832541    
+      2600   135.27076      487.34149      25137626       25139019      -1.3012873      1.3012873    
+      2650   137.28815      494.60955      25137607       25139021      -1.315902       1.315902     
+      2700   140.29795      505.453        25137585       25139030      -1.3280945      1.3280945    
+      2750   142.48517      513.33291      25137563       25139030      -1.3382433      1.3382433    
+      2800   136.28159      490.9832       25137612       25139016      -1.3465815      1.3465815    
+      2850   136.45344      491.60234      25137606       25139012      -1.3545827      1.3545827    
+      2900   138.92117      500.49285      25137587       25139018      -1.3573739      1.3573739    
+      2950   138.64926      499.51324      25137595       25139023      -1.351211       1.351211     
+      3000   140.3          505.46037      25137583       25139028      -1.3424508      1.3424508    
+      3050   139.6201       503.0109       25137589       25139027      -1.3375619      1.3375619    
+      3100   137.33292      494.77085      25137608       25139023      -1.3418213      1.3418213    
+      3150   134.94341      486.16214      25137639       25139028      -1.365194       1.365194     
+      3200   141.48558      509.73168      25137595       25139052      -1.4069164      1.4069164    
+      3250   143.07888      515.47188      25137593       25139066      -1.4536092      1.4536092    
+      3300   140.65777      506.74932      25137609       25139058      -1.4902112      1.4902112    
+      3350   138.89796      500.40921      25137605       25139036      -1.5133653      1.5133653    
+      3400   137.6069       495.75791      25137594       25139011      -1.5184072      1.5184072    
+      3450   136.80379      492.86455      25137581       25138990      -1.5064934      1.5064934    
+      3500   133.7479       481.85505      25137602       25138979      -1.4936438      1.4936438    
+      3550   135.67569      488.80031      25137596       25138994      -1.4946397      1.4946397    
+      3600   141.47112      509.67957      25137567       25139024      -1.503533       1.503533     
+      3650   142.17714      512.22317      25137579       25139043      -1.512955       1.512955     
+      3700   139.33864      501.99688      25137613       25139048      -1.5257613      1.5257613    
+      3750   139.28074      501.78828      25137613       25139047      -1.5405663      1.5405663    
+      3800   138.92964      500.52335      25137613       25139044      -1.5503824      1.5503824    
+      3850   138.3134       498.30322      25137614       25139038      -1.5479062      1.5479062    
+      3900   137.1905       494.25775      25137620       25139033      -1.5312727      1.5312727    
+      3950   135.18195      487.02154      25137643       25139035      -1.5099029      1.5099029    
+      4000   137.4521       495.20022      25137642       25139057      -1.5015554      1.5015554    
+      4050   144.59706      520.94146      25137598       25139087      -1.5092927      1.5092927    
+      4100   144.37089      520.1266       25137605       25139092      -1.528579       1.528579     
+      4150   141.57461      510.05242      25137610       25139068      -1.5570952      1.5570952    
+      4200   138.27092      498.15018      25137608       25139032      -1.5890581      1.5890581    
+      4250   134.71876      485.35278      25137618       25139005      -1.616671       1.616671     
+      4300   133.99787      482.75561      25137618       25138998      -1.6242848      1.6242848    
+      4350   134.81992      485.71725      25137624       25139012      -1.6087929      1.6087929    
+      4400   139.46145      502.43934      25137610       25139047      -1.5816257      1.5816257    
+      4450   141.84458      511.02506      25137616       25139077      -1.5618543      1.5618543    
+      4500   139.67947      503.22477      25137652       25139091      -1.5628501      1.5628501    
+      4550   139.45519      502.41677      25137664       25139101      -1.5864454      1.5864454    
+      4600   142.26901      512.55414      25137643       25139108      -1.6196089      1.6196089    
+      4650   139.21943      501.56738      25137660       25139094      -1.6481401      1.6481401    
+      4700   136.43427      491.53327      25137639       25139044      -1.6673771      1.6673771    
+      4750   131.99344      475.53422      25137637       25138997      -1.6819675      1.6819675    
+      4800   134.26427      483.71537      25137608       25138991      -1.6908527      1.6908527    
+      4850   136.26457      490.92187      25137602       25139005      -1.6855494      1.6855494    
+      4900   136.00821      489.99828      25137629       25139029      -1.6676604      1.6676604    
+      4950   138.05565      497.37463      25137639       25139061      -1.6472273      1.6472273    
+      5000   140.64898      506.71764      25137635       25139083      -1.623982       1.623982     
+Loop time of 763.057 on 1 procs for 5000 steps with 3776 atoms
+
+Performance: 0.566 ns/day, 42.392 hours/ns, 6.553 timesteps/s, 24.743 katom-step/s
+97.5% CPU use with 1 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 145.95     | 145.95     | 145.95     |   0.0 | 19.13
+Bond    | 0.0091765  | 0.0091765  | 0.0091765  |   0.0 |  0.00
+Kspace  | 280.92     | 280.92     | 280.92     |   0.0 | 36.82
+Neigh   | 2.4477     | 2.4477     | 2.4477     |   0.0 |  0.32
+Comm    | 0.46081    | 0.46081    | 0.46081    |   0.0 |  0.06
+Output  | 0.34545    | 0.34545    | 0.34545    |   0.0 |  0.05
+Modify  | 332.77     | 332.77     | 332.77     |   0.0 | 43.61
+Other   |            | 0.156      |            |       |  0.02
+
+Nlocal:           3776 ave        3776 max        3776 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:          12504 ave       12504 max       12504 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.72858e+06 ave 1.72858e+06 max 1.72858e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1728583
+Ave neighs/atom = 457.78151
+Ave special neighs/atom = 0.50847458
+Neighbor list builds = 80
+Dangerous builds = 0
+Total wall time: 0:12:56
