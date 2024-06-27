@@ -7,5 +7,5 @@ kspace_modify 		slab 3.0     	# amat twostep
 fix 			conp bot electrode/conp -3.0 1.979 couple top 3.0 symm on 	#fix for the cpm calculation 
 
 thermo 			50
-thermo_style 		custom step temp c_ctemp epair etotal c_qbot c_qtop		# on screen outputs
+thermo_style 		custom step c_ctemp epair etotal c_qbot c_qtop		# on screen outputs
 run 			5000
